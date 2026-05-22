@@ -36,6 +36,8 @@ client.on("interactionCreate", async (interaction) => {
             icon_url: interaction.user.displayAvatarURL(),
           },
 
+          title: "Novo histórico de leitura!",
+
           description:
             `${spoiler ? "⚠️ CONTÉM SPOILER\n\n" : ""}` +
             `📖 **${livro ?? "Livro não informado"}**\n` +
