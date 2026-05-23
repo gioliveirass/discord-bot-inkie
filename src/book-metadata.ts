@@ -97,7 +97,7 @@ async function fetchByTitle(displayTitle: string): Promise<BookMetadata> {
 
 export async function fetchBookMetadata(input: {
   displayTitle: string;
-  workId?: string;
+  workId?: string | undefined;
 }): Promise<BookMetadata> {
   const key = cacheKey(input.workId, input.displayTitle);
   const cached = cache.get(key);

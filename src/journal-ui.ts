@@ -19,8 +19,8 @@ export type PendingJournal = {
   pagina: number;
   mood: string;
   comentario: string;
-  totalPages?: number;
-  coverUrl?: string;
+  totalPages?: number | undefined;
+  coverUrl?: string | undefined;
 };
 
 const pendingByUser = new Map<string, PendingJournal>();

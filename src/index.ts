@@ -126,9 +126,8 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       const hasSpoiler = interaction.customId === SPOILER_YES_ID;
-      const channel = interaction.channel;
 
-      if (!channel || !channel.isTextBased()) {
+      if (!interaction.channel?.isSendable()) {
         await interaction.reply({
           content: "Não foi possível publicar no canal.",
           ephemeral: true,
@@ -141,7 +140,7 @@ client.on("interactionCreate", async (interaction) => {
         components: [],
       });
 
-      await channel.send({
+      await interaction.channel.send({
         embeds: [buildJournalEmbed(data, hasSpoiler, interaction.user)],
       });
     }
