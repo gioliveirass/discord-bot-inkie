@@ -4,34 +4,14 @@ import "dotenv/config";
 const commands = [
   new SlashCommandBuilder()
     .setName("journal")
-    .setDescription("Criar um novo registro de leitura")
-
-    .addStringOption((option) =>
-      option.setName("livro").setDescription("Nome do livro").setRequired(true)
-    )
-
-    .addIntegerOption((option) =>
-      option.setName("pagina").setDescription("Página atual").setRequired(true)
-    )
-
+    .setDescription("Registrar sua leitura do momento")
     .addStringOption((option) =>
       option
-        .setName("mood")
-        .setDescription("Sua reação do momento (pode ser emoji)")
+        .setName("livro")
+        .setDescription("Digite para buscar o livro (Open Library)")
+        .setAutocomplete(true)
         .setRequired(true)
-    )
-
-    .addStringOption((option) =>
-      option
-        .setName("comentario")
-        .setDescription("Comentário")
-        .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName("spoiler")
-        .setDescription("Tem spoiler no seu comentário?")
-        .setRequired(false)
+        .setMaxLength(100)
     ),
 ].map((command) => command.toJSON());
 

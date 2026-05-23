@@ -1,6 +1,20 @@
 import { Client, GatewayIntentBits } from "discord.js";
-
 import * as dotenv from "dotenv";
+import { fetchBookMetadata } from "./book-metadata.js";
+import { parseLivroInput } from "./book-livro.js";
+import { searchBookChoices } from "./book-search.js";
+import {
+  buildJournalEmbed,
+  buildJournalModal,
+  buildSpoilerButtons,
+  JOURNAL_MODAL_ID,
+  setPendingJournal,
+  setPendingLivro,
+  SPOILER_NO_ID,
+  SPOILER_YES_ID,
+  takePendingJournal,
+  takePendingLivro,
+} from "./journal-ui.js";
 
 dotenv.config();
 
@@ -13,42 +27,140 @@ client.once("ready", () => {
 });
 
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  try {
+    if (interaction.isAutocomplete() && interaction.commandName === "journal") {
+      const focused = interaction.options.getFocused(true);
+      if (focused.name !== "livro") {
+        await interaction.respond([]);
+        return;
+      }
 
-  if (interaction.commandName === "journal") {
-    const spoiler = interaction.options.get("spoiler");
+      const query = typeof focused.value === "string" ? focused.value : "";
+      const choices = await searchBookChoices(query);
+      await interaction.respond(choices);
+      return;
+    }
 
-    const livro = interaction.options.getString("livro");
+    if (interaction.isChatInputCommand() && interaction.commandName === "journal") {
+      const livro = interaction.options.getString("livro", true).trim();
 
-    const pagina = interaction.options.getInteger("pagina");
+      if (!livro) {
+        await interaction.reply({
+          content: "Informe o nome do livro (digite para ver sugestões ou escreva o título).",
+          ephemeral: true,
+        });
+        return;
+      }
 
-    const mood = interaction.options.getString("mood");
+      setPendingLivro(interaction.user.id, livro);
+      await interaction.showModal(buildJournalModal());
+      return;
+    }
 
-    const comentario = interaction.options.getString("comentario");
+    if (interaction.isModalSubmit() && interaction.customId === JOURNAL_MODAL_ID) {
+      const livro = takePendingLivro(interaction.user.id);
 
-    await interaction.reply({
-      embeds: [
-        {
-          color: 0x8b1e3f,
+      if (!livro) {
+        await interaction.reply({
+          content: "Sessão expirada. Use `/journal` de novo.",
+          ephemeral: true,
+        });
+        return;
+      }
 
-          author: {
-            name: interaction.user.username,
-            icon_url: interaction.user.displayAvatarURL(),
-          },
+      const paginaRaw = interaction.fields.getTextInputValue("pagina").trim();
+      const mood = interaction.fields.getTextInputValue("mood").trim();
+      const comentario = interaction.fields.getTextInputValue("comentario").trim();
+      const pagina = Number.parseInt(paginaRaw, 10);
 
-          title: "Novo histórico de leitura!",
+      if (!mood || !comentario) {
+        await interaction.reply({
+          content: "Preencha todos os campos do formulário.",
+          ephemeral: true,
+        });
+        return;
+      }
 
-          description:
-            `${spoiler ? "⚠️ CONTÉM SPOILER\n\n" : ""}` +
-            `📖 **${livro ?? "Livro não informado"}**\n` +
-            `🔖 Página ${pagina ?? "Página não informada"}\n` +
-            `☁️ Mood: ${mood ?? "🙂"}\n\n` +
-            `${comentario ?? "Sem comentário."}`,
+      if (Number.isNaN(pagina) || pagina < 1) {
+        await interaction.reply({
+          content: "A página precisa ser um número maior que zero.",
+          ephemeral: true,
+        });
+        return;
+      }
 
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    });
+      await interaction.deferReply({ ephemeral: true });
+
+      const { displayTitle, workId } = parseLivroInput(livro);
+      const metadata = await fetchBookMetadata({ displayTitle, workId });
+
+      setPendingJournal(interaction.user.id, {
+        livro: displayTitle,
+        pagina,
+        mood,
+        comentario,
+        totalPages: metadata.totalPages,
+        coverUrl: metadata.coverUrl,
+      });
+
+      await interaction.editReply({
+        content: "Quase lá! Seu comentário contém **spoiler**?",
+        components: [buildSpoilerButtons()],
+      });
+      return;
+    }
+
+    if (
+      interaction.isButton() &&
+      (interaction.customId === SPOILER_YES_ID ||
+        interaction.customId === SPOILER_NO_ID)
+    ) {
+      const data = takePendingJournal(interaction.user.id);
+
+      if (!data) {
+        await interaction.reply({
+          content: "Esse formulário expirou. Use `/journal` de novo.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const hasSpoiler = interaction.customId === SPOILER_YES_ID;
+      const channel = interaction.channel;
+
+      if (!channel || !channel.isTextBased()) {
+        await interaction.reply({
+          content: "Não foi possível publicar no canal.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await interaction.update({
+        content: "✅ Registro publicado!",
+        components: [],
+      });
+
+      await channel.send({
+        embeds: [buildJournalEmbed(data, hasSpoiler, interaction.user)],
+      });
+    }
+  } catch (error) {
+    console.error(error);
+
+    if (interaction.isAutocomplete()) {
+      if (!interaction.responded) {
+        await interaction.respond([]);
+      }
+      return;
+    }
+
+    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: "Algo deu errado. Tente de novo com `/journal`.",
+        ephemeral: true,
+      });
+    }
   }
 });
 
